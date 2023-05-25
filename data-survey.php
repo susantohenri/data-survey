@@ -28,6 +28,7 @@ define('DATA_SURVEY_LATEST_CSV_OPTION', 'data-survey-last-uploaded-csv');
 
 add_action('admin_menu', 'data_survey_admin_menu');
 add_action('rest_api_init', 'data_survey_rest_api_init');
+add_filter('frm_get_default_value', 'data_survey_rotate_fields', 10, 3);
 
 function data_survey_admin_menu()
 {
@@ -105,4 +106,41 @@ function data_survey_rest_api_init()
             readfile(DATA_SURVEY_CSV_FILE_ACTIVE);
         }
     ));
+}
+
+function data_survey_rotate_fields($new_value, $field, $is_default)
+{
+    if (!in_array($field->id, [3890, 3891])) return $new_value;
+    if (!$is_default) return $new_value;
+    if (!file_exists(DATA_SURVEY_CSV_FILE)) return $new_value;
+
+    $rows = [];
+    if (($open = fopen(DATA_SURVEY_CSV_FILE, 'r')) !== FALSE) {
+        while (($data = fgetcsv($open, 100000, ",")) !== FALSE) $rows[] = $data;
+        fclose($open);
+    }
+
+    global $wpdb;
+    $current_user_type = $wpdb->get_results($wpdb->prepare("
+        SELECT {$wpdb->prefix}frm_item_metas.meta_value
+        FROM {$wpdb->prefix}frm_items
+        LEFT JOIN {$wpdb->prefix}frm_item_metas ON {$wpdb->prefix}frm_item_metas.item_id = {$wpdb->prefix}frm_items.id
+        WHERE {$wpdb->prefix}frm_items.user_id = %d
+        AND {$wpdb->prefix}frm_items.form_id = 38
+        AND {$wpdb->prefix}frm_item_metas.field_id = 771
+    ", get_current_user_id()));
+    $current_user_type = array_map(function ($role) {
+        return $role->meta_value;
+    }, $current_user_type);
+
+    $rows = array_values(array_filter($rows, function ($row) use ($current_user_type) {
+        $csv_user_type = explode(',', $row[1]);
+        $csv_user_type = array_map(function ($user_type) {
+            return trim($user_type);
+        }, $csv_user_type);
+        $intersection = array_intersect($csv_user_type, $current_user_type);
+        return !empty($intersection);
+    }));
+
+    return $new_value;
 }

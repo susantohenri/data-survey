@@ -1,77 +1,14 @@
-Field,Field,User Type,Display Type,Frequency Type,Frequency
-User Type,3887,"Provider, Business, Seller",pie,Default,
-Display Type,3835,Provider,column,Static,30
-Frequency Type,3840,Provider,pie,Sequence,4
-Frequency #,3844,Provider,column,Regular,25%
-3887,3848,Provider,pie,Static,40
-"Provider, Business, Seller",3852,Business,column,Sequence,3
-pie,3860,Business,pie,Regular,35%
-Default,3856,Business,column,Static,5
-,3864,Business,pie,Sequence,5
-,3868,Business,column,Regular,50%
-3835,3873,Business,pie,Static,15
-Provider,3885,Business,column,Sequence,6
-,3888,Seller,pie,Regular,25%
-column,,,,,
-Static,,,,,
-30,,,,,
-3840,,,,,
-Provider,,,,,
-pie,,,,,
-Sequence,,,,,
-4,,,,,
-3844,,,,,
-Provider,,,,,
-,,,,,
-column,,,,,
-Regular,,,,,
-25%,,,,,
-3848,,,,,
-Provider,,,,,
-pie,,,,,
-Static,,,,,
-40,,,,,
-3852,,,,,
-Business,,,,,
-,,,,,
-column,,,,,
-Sequence,,,,,
-3,,,,,
-3860,,,,,
-Business,,,,,
-pie,,,,,
-Regular,,,,,
-35%,,,,,
-3856,,,,,
-Business,,,,,
-,,,,,
-column,,,,,
-Static,,,,,
-5,,,,,
-3864,,,,,
-Business,,,,,
-pie,,,,,
-Sequence,,,,,
-5,,,,,
-3868,,,,,
-Business,,,,,
-,,,,,
-column,,,,,
-Regular,,,,,
-50%,,,,,
-3873,,,,,
-Business,,,,,
-pie,,,,,
-Static,,,,,
-15,,,,,
-3885,,,,,
-Business,,,,,
-,,,,,
-column,,,,,
-Sequence,,,,,
-6,,,,,
-3888,,,,,
-Seller,,,,,
-pie,,,,,
-Regular,,,,,
-25%,,,,,
+Field,User Type,Display Type,Frequency Type,Frequency
+3887,"Provider, Business, Seller",pie,Default,
+3835,Provider,column,Static,30
+3840,Provider,pie,Sequence,4
+3844,Provider,column,Regular,25%
+3848,Provider,pie,Static,40
+3852,Business,column,Sequence,3
+3860,Business,pie,Regular,35%
+3856,Business,column,Static,5
+3864,Business,pie,Sequence,5
+3868,Business,column,Regular,50%
+3873,Business,pie,Static,15
+3885,Business,column,Sequence,6
+3888,Seller,pie,Regular,25%
