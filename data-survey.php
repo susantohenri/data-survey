@@ -110,7 +110,7 @@ function data_survey_rest_api_init()
 
 function data_survey_rotate_fields($new_value, $field, $is_default)
 {
-    if (!in_array($field->id, [3890, 3891])) return $new_value;
+    if (3890 != $field->id) return $new_value;
     if (!$is_default) return $new_value;
     if (!file_exists(DATA_SURVEY_CSV_FILE)) return $new_value;
 
@@ -133,6 +133,7 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         return $role->meta_value;
     }, $current_user_type);
 
+    // exclude rows not match current user type
     $rows = array_values(array_filter($rows, function ($row) use ($current_user_type) {
         $csv_user_type = explode(',', $row[1]);
         $csv_user_type = array_map(function ($user_type) {
@@ -142,5 +143,67 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         return !empty($intersection);
     }));
 
-    return $new_value;
+    wp_register_script('data-survey', plugin_dir_url(__FILE__) . 'data-survey.js', array('jquery'));
+    wp_enqueue_script('data-survey');
+
+    // 1st priority: static fields
+    $statics = array_values(array_filter($rows, function ($cols) {
+        return 'Static' === $cols[3];
+    }));
+    foreach ($statics as $cols) {
+        $field = $cols[0];
+        $days = $cols[4];
+        $answer_exists = $wpdb->get_results($wpdb->prepare("
+            SELECT id
+            FROM {$wpdb->prefix}frm_item_metas
+            WHERE field_id = 3890
+            AND meta_value = %d
+            AND DATEDIFF(NOW(), created_at) < %d
+        ", $field, $days));
+        if (empty($answer_exists)) return json_encode($cols);
+    }
+
+    // 2nd priority: sequence fields
+    $sequences = array_values(array_filter($rows, function ($cols) {
+        return 'Sequence' === $cols[3];
+    }));
+    foreach ($sequences as $cols) {
+        $field = $cols[0];
+        $times = $cols[4];
+        $recent_answers = $wpdb->get_results($wpdb->prepare("
+            SELECT id
+            FROM {$wpdb->prefix}frm_item_metas
+            WHERE field_id = 3890
+            ORDER BY id DESC
+            LIMIT %d
+        ", $times));
+        $matching_answers = array_values(array_filter($recent_answers, function ($answer) use ($field) {
+            return $answer->meta_value == $field;
+        }));
+        if (count($matching_answers) < $times) return json_encode($cols);
+    }
+
+    // 3rd priority: regular fields
+    $regulars = array_values(array_filter($rows, function ($cols) {
+        return 'Regular' === $cols[3];
+    }));
+    foreach ($regulars as $cols) {
+        $field = $cols[0];
+        $percent = explode('%', $cols[4])[0];
+        $all_answers = $wpdb->get_results($wpdb->prepare("
+            SELECT meta_value
+            FROM {$wpdb->prefix}frm_item_metas
+            WHERE field_id = %d
+        ", 3890));
+        $current_field_answers = array_filter($all_answers, function ($answer) use ($field) {
+            return $answer->meta_value == $field;
+        });
+        if (count($current_field_answers) / count($all_answers) < (int) $percent / 100) return json_encode($cols);
+    }
+
+    // last: default
+    $defaults = array_values(array_filter($rows, function ($cols) {
+        return 'Default' === $cols[3];
+    }));
+    return json_encode($defaults[0]);
 }
