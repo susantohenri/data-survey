@@ -171,7 +171,7 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         $field = $cols[0];
         $times = $cols[4];
         $recent_answers = $wpdb->get_results($wpdb->prepare("
-            SELECT id
+            SELECT meta_value
             FROM {$wpdb->prefix}frm_item_metas
             WHERE field_id = 3890
             ORDER BY id DESC
@@ -180,7 +180,7 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         $matching_answers = array_values(array_filter($recent_answers, function ($answer) use ($field) {
             return $answer->meta_value == $field;
         }));
-        if (count($matching_answers) < $times) return json_encode($cols);
+        if (empty($matching_answers)) return json_encode($cols);
     }
 
     // 3rd priority: regular fields
