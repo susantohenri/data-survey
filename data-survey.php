@@ -150,60 +150,81 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
     $statics = array_values(array_filter($rows, function ($cols) {
         return 'Static' === $cols[3];
     }));
+    if (!empty($statics)) {
+        $static_fields = implode(',', array_map(function ($static) {
+            return $static[0];
+        }, $statics));
+        $last_time_answered = $wpdb->get_results($wpdb->prepare("
+            SELECT
+                {$wpdb->prefix}frm_item_metas.field_id
+                , DATEDIFF(CURRENT_DATE, {$wpdb->prefix}frm_item_metas.created_at) last_answered_days
+            FROM {$wpdb->prefix}frm_item_metas
+            WHERE %d AND {$wpdb->prefix}frm_item_metas.field_id IN ($static_fields)
+        ", true));
+        if (empty($last_time_answered)) return $statics[0];
 
-    $static_fields = implode(',', array_map(function ($static) {
-        return $static[0];
-    }, $statics));
-    $last_time_answered = $wpdb->get_results($wpdb->prepare("
-        SELECT
-            {$wpdb->prefix}frm_item_metas.field_id
-            , DATEDIFF(CURRENT_DATE, {$wpdb->prefix}frm_item_metas.created_at) last_answered_days
-        FROM {$wpdb->prefix}frm_item_metas
-        WHERE %d AND {$wpdb->prefix}frm_item_metas.field_id IN ($static_fields)
-    ", true));
+        $pairable_last_time_answered = [];
+        foreach ($last_time_answered as $lta) $pairable_last_time_answered[$lta->field_id] = $lta->last_answered_days;
 
-    $field_last_answered_days = [];
-    foreach ($last_time_answered as $lta) $field_last_answered_days[$lta->field_id] = $lta->last_answered_days;
-
-    $statics_sortable = [];
-    foreach ($statics as $cols) {
-        $field = $cols[0];
-        $frequency = $cols[4];
-        if (!isset($field_last_answered_days[$field])) return $cols;
-        else if ($field_last_answered_days[$field] < $frequency) continue;
-        else {
-            $statics_sortable[] = [
-                'row' => $cols,
-                'weight' => $field_last_answered_days[$field] - $frequency
+        $statics_sortable = [];
+        foreach ($statics as $static) {
+            $field = $static[0];
+            $frequency = $static[4];
+            if (!isset($pairable_last_time_answered[$field])) return $static;
+            else if ($pairable_last_time_answered[$field] < $frequency) continue;
+            else $statics_sortable[] = [
+                'row' => $static,
+                'weight' => $pairable_last_time_answered[$field] - $frequency
             ];
         }
-    }
 
-    if (count($statics_sortable) > 0) {
-        usort($statics_sortable, function ($a, $b) {
-            return $b['weight'] - $a['weight'];
-        });
-        return $statics_sortable[0]['row'];
+        if (!empty($statics_sortable)) {
+            usort($statics_sortable, function ($a, $b) {
+                return $b['weight'] - $a['weight'];
+            });
+            return $statics_sortable[0]['row'];
+        }
     }
 
     // 2nd priority: sequence fields
     $sequences = array_values(array_filter($rows, function ($cols) {
         return 'Sequence' === $cols[3];
     }));
-    foreach ($sequences as $cols) {
-        $field = $cols[0];
-        $times = $cols[4];
+    if (!empty($sequences)) {
+        $sequences_freuencies = array_map(function ($seqence) {
+            return $seqence[4];
+        }, $sequences);
+        $sequences_greatest_frequency = max($sequences_freuencies);
         $recent_answers = $wpdb->get_results($wpdb->prepare("
             SELECT meta_value
             FROM {$wpdb->prefix}frm_item_metas
             WHERE field_id = 3890
             ORDER BY id DESC
             LIMIT %d
-        ", $times));
-        $matching_answers = array_values(array_filter($recent_answers, function ($answer) use ($field) {
-            return $answer->meta_value == $field;
-        }));
-        if (empty($matching_answers)) return json_encode($cols);
+        ", $sequences_greatest_frequency));
+        if (empty($recent_answers)) return $sequences[0];
+        $recent_answers = array_reverse($recent_answers);
+
+        $pairable_recent_answers = [];
+        foreach ($recent_answers as $index => $answer) $pairable_recent_answers[$answer->meta_value] = $index;
+
+        $sequences_sortable = [];
+        foreach ($sequences as $sequence) {
+            $field = $sequence[0];
+            $frequency = $sequence[4];
+            if (!isset($pairable_recent_answers[$field])) return $sequence;
+            else if ($pairable_recent_answers[$field] < $frequency) continue;
+            else $sequences_sortable[] = [
+                'row' => $sequence,
+                'weight' => $pairable_recent_answers[$field] - $frequency
+            ];
+        }
+        if (!empty($sequences_sortable)) {
+            usort($sequences_sortable, function ($a, $b) {
+                return $b['weight'] - $a['weight'];
+            });
+            return $sequences_sortable[0]['row'];
+        }
     }
 
     // 3rd priority: regular fields
