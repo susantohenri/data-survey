@@ -191,10 +191,10 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         return 'Sequence' === $cols[3];
     }));
     if (!empty($sequences)) {
-        $sequences_freuencies = array_map(function ($seqence) {
+        $sequences_frequencies = array_map(function ($seqence) {
             return $seqence[4];
         }, $sequences);
-        $sequences_greatest_frequency = max($sequences_freuencies);
+        $sequences_greatest_frequency = max($sequences_frequencies) + 1;
         $recent_answers = $wpdb->get_results($wpdb->prepare("
             SELECT meta_value
             FROM {$wpdb->prefix}frm_item_metas
@@ -203,10 +203,12 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
             LIMIT %d
         ", $sequences_greatest_frequency));
         if (empty($recent_answers)) return $sequences[0];
-        $recent_answers = array_reverse($recent_answers);
 
         $pairable_recent_answers = [];
-        foreach ($recent_answers as $index => $answer) $pairable_recent_answers[$answer->meta_value] = $index;
+        foreach ($recent_answers as $index => $answer) {
+            if (isset($pairable_recent_answers[$answer->meta_value])) continue;
+            $pairable_recent_answers[$answer->meta_value] = $index;
+        }
 
         $sequences_sortable = [];
         foreach ($sequences as $sequence) {
