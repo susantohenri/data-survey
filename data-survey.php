@@ -150,17 +150,40 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
     $statics = array_values(array_filter($rows, function ($cols) {
         return 'Static' === $cols[3];
     }));
+
+    $static_fields = implode(',', array_map(function ($static) {
+        return $static[0];
+    }, $statics));
+    $last_time_answered = $wpdb->get_results($wpdb->prepare("
+        SELECT
+            {$wpdb->prefix}frm_item_metas.field_id
+            , DATEDIFF(CURRENT_DATE, {$wpdb->prefix}frm_item_metas.created_at) last_answered_days
+        FROM {$wpdb->prefix}frm_item_metas
+        WHERE %d AND {$wpdb->prefix}frm_item_metas.field_id IN ($static_fields)
+    ", true));
+
+    $field_last_answered_days = [];
+    foreach ($last_time_answered as $lta) $field_last_answered_days[$lta->field_id] = $lta->last_answered_days;
+
+    $statics_sortable = [];
     foreach ($statics as $cols) {
         $field = $cols[0];
-        $days = $cols[4];
-        $answer_exists = $wpdb->get_results($wpdb->prepare("
-            SELECT id
-            FROM {$wpdb->prefix}frm_item_metas
-            WHERE field_id = 3890
-            AND meta_value = %d
-            AND DATEDIFF(NOW(), created_at) < %d
-        ", $field, $days));
-        if (empty($answer_exists)) return json_encode($cols);
+        $frequency = $cols[4];
+        if (!isset($field_last_answered_days[$field])) return $cols;
+        else if ($field_last_answered_days[$field] < $frequency) continue;
+        else {
+            $statics_sortable[] = [
+                'row' => $cols,
+                'weight' => $field_last_answered_days[$field] - $frequency
+            ];
+        }
+    }
+
+    if (count($statics_sortable) > 0) {
+        usort($statics_sortable, function ($a, $b) {
+            return $b['weight'] - $a['weight'];
+        });
+        return $statics_sortable[0]['row'];
     }
 
     // 2nd priority: sequence fields
