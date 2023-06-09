@@ -233,23 +233,50 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
     $regulars = array_values(array_filter($rows, function ($cols) {
         return 'Regular' === $cols[3];
     }));
-    foreach ($regulars as $cols) {
-        $field = $cols[0];
-        $percent = explode('%', $cols[4])[0];
-        $all_answers = $wpdb->get_results($wpdb->prepare("
-            SELECT meta_value
+    if (!empty($regulars)) {
+        $regular_fields = implode(',', array_map(function ($regular) {
+            return $regular[0];
+        }, $regulars));
+        $total_answer_count = $wpdb->get_var($wpdb->prepare("
+            SELECT COUNT({$wpdb->prefix}frm_item_metas.id) answer_count
             FROM {$wpdb->prefix}frm_item_metas
-            WHERE field_id = %d
+            WHERE {$wpdb->prefix}frm_item_metas.field_id = %d
         ", 3890));
-        $current_field_answers = array_filter($all_answers, function ($answer) use ($field) {
-            return $answer->meta_value == $field;
-        });
-        if (count($current_field_answers) / count($all_answers) < (int) $percent / 100) return json_encode($cols);
+        $regular_answer_count = $wpdb->get_results($wpdb->prepare("
+            SELECT {$wpdb->prefix}frm_item_metas.field_id, COUNT({$wpdb->prefix}frm_item_metas.id) answer_count
+            FROM {$wpdb->prefix}frm_item_metas
+            WHERE %d AND {$wpdb->prefix}frm_item_metas.field_id IN($regular_fields)
+            GROUP BY {$wpdb->prefix}frm_item_metas.field_id
+        ", true));
+        if (empty($regular_answer_count)) return $regulars[0];
+
+        $pairable_answer_count = [];
+        foreach ($regular_answer_count as $count) $pairable_answer_count[$count->field_id] = $count->answer_count;
+        // echo json_encode($pairable_answer_count) . '<br>';
+
+        $regulars_sortable = [];
+        foreach ($regulars as $regular){
+            $field = $regular[0];
+            $frequency = explode('%', $regular[4])[0];
+            if (!isset($pairable_answer_count[$field])) return $regular;
+            else if ($pairable_answer_count[$field] / $total_answer_count >= $frequency / 100) continue;
+            else $regulars_sortable[] = [
+                'row' => $regular,
+                'weight' => $pairable_answer_count[$field] / $total_answer_count - $frequency / 100
+            ];
+        }
+        if (!empty($regulars_sortable)) {
+            usort($regulars_sortable, function ($a, $b) {
+                return $b['weight'] - $a['weight'];
+            });
+            // echo json_encode($regulars_sortable) . '<br>';
+            return $regulars_sortable[0]['row'];
+        }
     }
 
     // last: default
     $defaults = array_values(array_filter($rows, function ($cols) {
         return 'Default' === $cols[3];
     }));
-    return json_encode($defaults[0]);
+    return $defaults[0];
 }
