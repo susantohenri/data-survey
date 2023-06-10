@@ -28,7 +28,7 @@ define('DATA_SURVEY_LATEST_CSV_OPTION', 'data-survey-last-uploaded-csv');
 
 add_action('admin_menu', 'data_survey_admin_menu');
 add_action('rest_api_init', 'data_survey_rest_api_init');
-add_filter('frm_get_default_value', 'data_survey_rotate_fields', 10, 3);
+add_action('frm_entries_footer_scripts', 'data_survey_register_script', 20, 2);
 
 function data_survey_admin_menu()
 {
@@ -84,6 +84,23 @@ function data_survey_admin_menu()
     }, '');
 }
 
+function data_survey_register_script($fields, $form)
+{
+    if (153 == $form->id) {
+        wp_register_script('data-survey', plugin_dir_url(__FILE__) . 'data-survey.js', array('jquery'));
+        wp_enqueue_script('data-survey');
+        $cache_breaker = time();
+        $user_id = base64_encode(get_current_user_id());
+        wp_localize_script(
+            'data-survey',
+            'data_survey',
+            array(
+                'url' => site_url("wp-json/data-survey/v1/get-field?key={$user_id}&cache-breaker={$cache_breaker}"),
+            )
+        );
+    }
+}
+
 function data_survey_rest_api_init()
 {
     register_rest_route('data-survey/v1', '/download-sample', array(
@@ -106,13 +123,16 @@ function data_survey_rest_api_init()
             readfile(DATA_SURVEY_CSV_FILE_ACTIVE);
         }
     ));
+    register_rest_route('data-survey/v1', '/get-field', array(
+        'methods' => 'GET',
+        'permission_callback' => '__return_true',
+        'callback' => 'data_survey_rotate_fields'
+    ));
 }
 
-function data_survey_rotate_fields($new_value, $field, $is_default)
+function data_survey_rotate_fields()
 {
-    if (3890 != $field->id) return $new_value;
-    if (!$is_default) return $new_value;
-    if (!file_exists(DATA_SURVEY_CSV_FILE)) return $new_value;
+    if (!file_exists(DATA_SURVEY_CSV_FILE)) return '';
 
     $rows = [];
     if (($open = fopen(DATA_SURVEY_CSV_FILE, 'r')) !== FALSE) {
@@ -128,7 +148,7 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         WHERE {$wpdb->prefix}frm_items.user_id = %d
         AND {$wpdb->prefix}frm_items.form_id = 38
         AND {$wpdb->prefix}frm_item_metas.field_id = 771
-    ", get_current_user_id()));
+    ", base64_decode($_GET['key'])));
     $current_user_type = array_map(function ($role) {
         return $role->meta_value;
     }, $current_user_type);
@@ -142,9 +162,6 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         $intersection = array_intersect($csv_user_type, $current_user_type);
         return !empty($intersection);
     }));
-
-    wp_register_script('data-survey', plugin_dir_url(__FILE__) . 'data-survey.js', array('jquery'));
-    wp_enqueue_script('data-survey');
 
     // 1st priority: static fields
     $statics = array_values(array_filter($rows, function ($cols) {
@@ -161,7 +178,7 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
             FROM {$wpdb->prefix}frm_item_metas
             WHERE %d AND {$wpdb->prefix}frm_item_metas.field_id IN ($static_fields)
         ", true));
-        if (empty($last_time_answered)) return $statics[0];
+        if (empty($last_time_answered)) return json_encode($statics[0]);
 
         $pairable_last_time_answered = [];
         foreach ($last_time_answered as $lta) $pairable_last_time_answered[$lta->field_id] = $lta->last_answered_days;
@@ -170,10 +187,10 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         foreach ($statics as $static) {
             $field = $static[0];
             $frequency = $static[4];
-            if (!isset($pairable_last_time_answered[$field])) return $static;
+            if (!isset($pairable_last_time_answered[$field])) return json_encode($static);
             else if ($pairable_last_time_answered[$field] < $frequency) continue;
             else $statics_sortable[] = [
-                'row' => $static,
+                'row' => json_encode($static),
                 'weight' => $pairable_last_time_answered[$field] - $frequency
             ];
         }
@@ -202,7 +219,7 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
             ORDER BY id DESC
             LIMIT %d
         ", $sequences_greatest_frequency));
-        if (empty($recent_answers)) return $sequences[0];
+        if (empty($recent_answers)) return json_encode($sequences[0]);
 
         $pairable_recent_answers = [];
         foreach ($recent_answers as $index => $answer) {
@@ -214,10 +231,10 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
         foreach ($sequences as $sequence) {
             $field = $sequence[0];
             $frequency = $sequence[4];
-            if (!isset($pairable_recent_answers[$field])) return $sequence;
+            if (!isset($pairable_recent_answers[$field])) return json_encode($sequence);
             else if ($pairable_recent_answers[$field] < $frequency) continue;
             else $sequences_sortable[] = [
-                'row' => $sequence,
+                'row' => json_encode($sequence),
                 'weight' => $pairable_recent_answers[$field] - $frequency
             ];
         }
@@ -248,20 +265,19 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
             WHERE %d AND {$wpdb->prefix}frm_item_metas.field_id IN($regular_fields)
             GROUP BY {$wpdb->prefix}frm_item_metas.field_id
         ", true));
-        if (empty($regular_answer_count)) return $regulars[0];
+        if (empty($regular_answer_count)) return json_encode($regulars[0]);
 
         $pairable_answer_count = [];
         foreach ($regular_answer_count as $count) $pairable_answer_count[$count->field_id] = $count->answer_count;
-        // echo json_encode($pairable_answer_count) . '<br>';
 
         $regulars_sortable = [];
-        foreach ($regulars as $regular){
+        foreach ($regulars as $regular) {
             $field = $regular[0];
             $frequency = explode('%', $regular[4])[0];
-            if (!isset($pairable_answer_count[$field])) return $regular;
+            if (!isset($pairable_answer_count[$field])) return json_encode($regular);
             else if ($pairable_answer_count[$field] / $total_answer_count >= $frequency / 100) continue;
             else $regulars_sortable[] = [
-                'row' => $regular,
+                'row' => json_encode($regular),
                 'weight' => $pairable_answer_count[$field] / $total_answer_count - $frequency / 100
             ];
         }
@@ -269,7 +285,6 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
             usort($regulars_sortable, function ($a, $b) {
                 return $b['weight'] - $a['weight'];
             });
-            // echo json_encode($regulars_sortable) . '<br>';
             return $regulars_sortable[0]['row'];
         }
     }
@@ -278,5 +293,5 @@ function data_survey_rotate_fields($new_value, $field, $is_default)
     $defaults = array_values(array_filter($rows, function ($cols) {
         return 'Default' === $cols[3];
     }));
-    return $defaults[0];
+    return json_encode($defaults[0]);
 }
