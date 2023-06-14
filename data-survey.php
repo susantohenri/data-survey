@@ -29,6 +29,7 @@ define('DATA_SURVEY_LATEST_CSV_OPTION', 'data-survey-last-uploaded-csv');
 add_action('admin_menu', 'data_survey_admin_menu');
 add_action('rest_api_init', 'data_survey_rest_api_init');
 add_action('frm_entries_footer_scripts', 'data_survey_register_script', 20, 2);
+add_filter('frm_filter_view', 'data_survey_view', 10, 1);
 
 function data_survey_admin_menu()
 {
@@ -294,4 +295,11 @@ function data_survey_rotate_fields()
         return 'Default' === $cols[3];
     }));
     return json_encode($defaults[0]);
+}
+
+function data_survey_view($view)
+{
+    $view->post_content = str_replace('[3890]', $_POST['item_meta']['3890'], $view->post_content);
+    $view->post_content = str_replace('[3891]', $_POST['item_meta']['3891'], $view->post_content);
+    return $view;
 }
