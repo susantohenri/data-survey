@@ -299,7 +299,11 @@ function data_survey_rotate_fields()
 
 function data_survey_view($view)
 {
-    if (!!strpos($view->post_content, '[3890]')) $view->post_content = str_replace('[3890]', $_POST['item_meta']['3890'], $view->post_content);
-    if (!!strpos($view->post_content, '[3891]')) $view->post_content = str_replace('[3891]', $_POST['item_meta']['3891'], $view->post_content);
+    if (isset($_POST)) {
+        if (isset($_POST['item_meta'])) {
+            if (isset($_POST['item_meta']['3890'])) $view->post_content = str_replace('[3890]', $_POST['item_meta']['3890'], $view->post_content);
+            if (isset($_POST['item_meta']['3891'])) $view->post_content = str_replace('[3891]', $_POST['item_meta']['3891'], $view->post_content);
+        }
+    }
     return $view;
 }
