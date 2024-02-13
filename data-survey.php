@@ -30,6 +30,7 @@ add_action('admin_menu', 'data_survey_admin_menu');
 add_action('rest_api_init', 'data_survey_rest_api_init');
 add_action('frm_entries_footer_scripts', 'data_survey_register_script', 20, 2);
 add_filter('frm_filter_view', 'data_survey_view', 10, 1);
+add_filter('frm_filter_view', 'data_survey_graph_tooltip_hide_entry_count', 10, 2);
 
 function data_survey_admin_menu()
 {
@@ -305,5 +306,25 @@ function data_survey_view($view)
             if (isset($_POST['item_meta']['3891'])) $view->post_content = str_replace('[3891]', $_POST['item_meta']['3891'], $view->post_content);
         }
     }
+    return $view;
+}
+
+function data_survey_graph_tooltip_hide_entry_count($view)
+{
+    echo "
+        <style type=\"text/css\">
+            .google-visualization-tooltip ul li:nth-child(2) span {
+                display: inline-block !important;
+            }
+
+            .google-visualization-tooltip ul li:nth-child(2) span:first-line {
+                visibility: hidden !important;
+            }
+
+            .google-visualization-tooltip ul li:nth-child(2) span:nth-child(2) {
+                visibility: hidden !important;
+            }
+        </style>
+    ";
     return $view;
 }
