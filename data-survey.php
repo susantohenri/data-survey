@@ -311,7 +311,7 @@ function data_survey_view($view)
 
 function data_survey_graph_tooltip_hide_entry_count($view)
 {
-    echo "
+    if (12555 == $view->ID) echo "
         <style type=\"text/css\">
             .google-visualization-tooltip ul li:nth-child(2) span {
                 display: inline-block !important;
